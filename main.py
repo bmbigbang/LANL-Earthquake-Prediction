@@ -75,3 +75,69 @@ stats = {
     'max_acoustic': max_acoustic, 'min_acoustic': min_acoustic, 'max_time': max_time, 'min_time': min_time,
     'avg_acoustic': sum_acoustic / data_points, 'ave_time': sum_time / data_points
 }
+
+
+if next_batch.empty:
+    train_data_generator = DataGen(file_path='train.csv', chunk_size=10000000)
+    next_batch, end_of_file = train_data_generator.next_batch()
+
+import matplotlib.pyplot as plt
+from scipy import signal
+from math import pi, e
+from DataGen import DataGen
+
+fig, axs = plt.subplots(2, 2, figsize=(16, 4))
+train_data_generator = DataGen(file_path='train.csv', chunk_size=10000000)
+next_batch, end_of_file = train_data_generator.next_batch()
+current_batch = next_batch['acoustic_data'][10000:11000]
+current_batch.plot(x='time_to_failure', y='acoustic_data', ax=axs[0, 0])
+
+sigma = [0.1, 0.5, 1]
+t = M = [32, 48, 56] # windows sizes
+w = 2*pi # Omega0 - base angular freq
+
+sigma_term = e**(-(sigma[0]**2)/2)
+morlet = signal.morlet(t[0], w=2*pi)
+F_W = signal.fftconvolve(current_batch, morlet - sigma_term, mode='same')
+axs[0, 1].plot(F_W, label="sigma = {}".format(sigma[0]))
+axs[0, 1].legend()
+
+sigma_term = e**(-(sigma[1]**2)/2)
+morlet = signal.morlet(t[1], w=2*pi)
+F_W = signal.fftconvolve(current_batch, morlet - sigma_term, mode='same')
+axs[1, 0].plot(F_W, label="sigma = {}".format(sigma[1]))
+axs[1, 0].legend()
+
+sigma_term = e**(-(sigma[2]**2)/2)
+morlet = signal.morlet(t[2], w=2*pi)
+F_W = signal.fftconvolve(current_batch, morlet - sigma_term, mode='same')
+axs[1, 1].plot(F_W, label="sigma = {}".format(sigma[2]))
+axs[1, 1].legend()
+
+import numpy as np
+def preprocess(current_batch):
+    f = np.ndarray(shape=(3,), dtype=np.int16)
+    for i in range(len((sigma))):
+        sigma_term = e**(-(sigma[i]**2)/2)
+        morlet = signal.morlet(t[i], w=2*pi)
+        C_psi = 2 * pi * signal.correlate(np.fft.fft(current_batch), np.conj(np.fft.fft(current_batch)), mode='full').sum()
+        F_W = signal.fftconvolve(current_batch, morlet - sigma_term, mode='same')
+        F_W = np.dot(F_W[100:900], F_W[100:900]).real / C_psi.real
+        f[i] = int(F_W * 100)
+    return f
+
+
+train_data_generator = DataGen(file_path='train.csv', chunk_size=10000000)
+sum_time = 0
+while True:
+    next_batch, end_of_file = train_data_generator.next_batch()
+    if end_of_file:
+        break
+    data_points = next_batch.shape[0]
+    maxx = next_batch.max(axis=0)
+    minn = next_batch.min(axis=0)
+    summ = next_batch.sum(axis=0)
+    max_time = maxx[1]
+    sum_time += summ[1]
+    min_time = minn[1]
+    preprocess()
