@@ -90,7 +90,7 @@ fig, axs = plt.subplots(2, 2, figsize=(16, 4))
 train_data_generator = DataGen(file_path='train.csv', chunk_size=10000000)
 next_batch, end_of_file = train_data_generator.next_batch()
 current_batch = next_batch['acoustic_data'][10000:11000]
-current_batch.plot(x='time_to_failure', y='acoustic_data', ax=axs[0, 0])
+next_batch[10000:11000].plot(x='time_to_failure', y='acoustic_data', ax=axs[0, 0])
 
 sigma = [0.1, 0.5, 1]
 t = M = [32, 48, 56] # windows sizes
@@ -116,17 +116,18 @@ axs[1, 1].legend()
 
 import numpy as np
 def preprocess(current_batch):
-    f = np.ndarray(shape=(3,), dtype=np.int16)
+    out_batch = np.ndarray(shape=(3,), dtype=np.int16)
     for i in range(len((sigma))):
         sigma_term = e**(-(sigma[i]**2)/2)
         morlet = signal.morlet(t[i], w=2*pi)
         C_psi = 2 * pi * signal.correlate(np.fft.fft(current_batch), np.conj(np.fft.fft(current_batch)), mode='full').sum()
         F_W = signal.fftconvolve(current_batch, morlet - sigma_term, mode='same')
-        F_W = np.dot(F_W[100:900], F_W[100:900]).real / C_psi.real
-        f[i] = int(F_W * 100)
-    return f
+        F_W = np.dot(F_W[100:900], F_W[100:900]).real / (C_psi.real + 1)
+        out_batch[i] = (F_W * 100).astype(np.int16)
+    return out_batch
 
 
+import tensorflow as tf
 train_data_generator = DataGen(file_path='train.csv', chunk_size=10000000)
 sum_time = 0
 while True:
